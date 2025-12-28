@@ -1,287 +1,327 @@
-Avtomatizirano razvojno okolje z Vagrantom, Ansible in VirtualBoxom
+# Avtomatizirano razvojno in testno okolje za Report App
 
-### Opis projekta
+Ta repozitorij vsebuje **tri različne avtomatizirane rešitve** za postavitev aplikacije **Report App**:
 
-Ta projekt predstavlja popolnoma avtomatizirano razvojno in testno okolje za aplikacijo Report App.
-Zgrajen je na osnovi tehnologij Vagrant, VirtualBox in Ansible, ki skupaj omogočajo enostavno ponovno ustvarjanje celotnega strežniškega okolja z enim samim ukazom:
+1. **Vagrant + Ansible + VirtualBox** – lokalno razvojno okolje
+2. **Cloud-init + Multipass** – hitra postavitev VM-ja
+3. **Docker + Ansible (Infra as Code)** – kontejnerska različica z Docker Compose in GHCR
 
-"vagrant up"
+Cilj projekta je omogočiti **ponovljivo, enostavno in zanesljivo** postavitev celotnega okolja (backend, frontend, baza, reverse proxy, varnost) z enim samim ukazom.
 
-Okolje samodejno nastavi:
+> ⚠️ **Vsa gesla in certifikati v projektu so namenjeni izključno razvoju in testiranju.**
 
-operacijski sistem Ubuntu 22.04 (Jammy)
-Nginx kot reverse proxy in strežnik statičnih datotek
-PostgreSQL podatkovno bazo s samodejno ustvarjenimi uporabniki in pravicami
-Python/FastAPI backend (z virtualnim okoljem)
-Angular frontend
-Redis strežnik
-TLS certifikate (lokalni CA in podpisani strežniški certifikat)
-UFW požarni zid
-XFCE grafični vmesnik ter XRDP za oddaljen grafični dostop
-systemd servis za zagon backend aplikacije
+---
+
+## Namen projekta
+
+Namen projekta je prikazati **celovito avtomatizacijo postavitve sodobnega aplikacijskega stacka** z uporabo orodij in praks, ki se uporabljajo v realnih DevOps okoljih. Projekt združuje virtualizacijo, konfiguracijski management, kontejnerizacijo, CI/CD in varnost ter omogoča hitro, ponovljivo in zanesljivo postavitev razvojnega ali demo okolja.
+
+Projekt je razvit kot del študijskih vaj in služi kot:
+
+- demonstracija znanja iz **virtualizacije in avtomatizacije**,
+- osnova za **lokalni razvoj ali predstavitev aplikacije**,
+- primer dobre prakse za **Infrastructure as Code (IaC)**.
+
+---
+
+## Tehnološki pregled
+
+Projekt uporablja naslednje tehnologije:
+
+- **Ubuntu 22.04 (Jammy)**
+- **FastAPI (Python backend)**
+- **Angular (frontend)**
+- **PostgreSQL**
+- **Redis**
+- **Nginx** (reverse proxy)
+- **Docker + Docker Compose** (za kontejnersko različico)
+- **TLS certifikati (lokalni/self-signed ali Let's Encrypt)**
+- **systemd** za avtomatski zagon backend servisa
+- **UFW požarni zid**
+- **XFCE + XRDP** (grafični dostop preko RDP)
+- **CI/CD** z GitHub Actions za avtomatsko buildanje image-ov
+- **Buildx / multi-stage Docker build** za optimizacijo image-ov
+
+---
+
+# Možnost A: Vagrant + Ansible + VirtualBox
+
+Ta možnost je namenjena predvsem **lokalnemu razvoju** in omogoča popolnoma avtomatizirano postavitev z ukazom:
+
+```bash
+vagrant up
+```
+
+## Zahteve
+
+- VirtualBox
+- Vagrant
+
+## Zagon
+```bash
+cd dev-ops
+vagrant up
+```
+Ob prvem zagonu se:
+- ustvari VM
+- namesti Ansible
+- izvede Ansible playbook
+- zažene celotna aplikacija
 
 ### Struktura projekta
-
+```
 dev-ops/
 ├── Vagrantfile
 ├── provision-base.sh
 └── ansible/
     ├── inventory
     └── playbook.yml
+```
 
-### 1. Vagrantfile
+### Kaj se samodejno nastavi
 
-Vagrantfile definira in vzpostavi navidezni stroj, na katerem teče celotna infrastruktura za Report App.
+#### Sistem
 
-Ključne značilnosti
+- Ubuntu 22.04
+- Časovni pas
+- UFW požarni zid
 
-OS slika: ubuntu/jammy64
+#### Storitve
 
-VirtualBox nastavitve:
-4096 MB RAM
-2 CPU jedri
-vključen GUI (za XFCE)
-DNS popravki (izogib težavam pri apt update)
+- Nginx (reverse proxy + static)
+- PostgreSQL (baza + uporabnik)
+- Redis
+- systemd servis za FastAPI
 
-Posredovanje portov:
-HTTP: 8080 → 80
-HTTPS: 8443 → 443
-RDP: 33389 → 3389
-Sinhronizirana mapa: lokalna mapa se preslika v /vagrant
+#### Backend
 
-Provisioning:
-provision-base.sh namesti Ansible
-ansible_local zažene glavni Ansible playbook
+- Python virtualno okolje
+- FastAPI aplikacija
+- `/etc/reportapp.env` konfiguracija
 
-### 2. rovision-base.sh
+#### Frontend
 
-Ta skripta pripravi osnovno okolje v navideznem stroju, da lahko Ansible pravilno deluje.
+- Node.js (NodeSource)
+- `npm install`
+- Angular production build
 
-Funkcionalnost skripte:
-posodobitev paketov (apt-get update)
+#### TLS
 
-namestitev:
-Python 3
-virtualenv
-pip
-git
-orodja za upravljanje repozitorijev
-Ansible
+- Lokalni self-signed CA in certifikat
 
-### 3. Ansible Playbook (ansible/playbook.yml)
+#### Grafični dostop
 
-Glavni del projekta predstavlja Ansible playbook, ki v celoti avtomatizira namestitev in konfiguracijo aplikacije Report App.
+- XFCE
+- XRDP
 
-Playbook vsebuje več logičnih sklopov:
+### Dostop
 
-## 3.1 Sistemska priprava
-nastavitev časovnega pasu
-namestitev strežniških paketov:
-Nginx
-PostgreSQL in dodatki
-Redis
-build orodja
-WeasyPrint odvisnosti (Cairo, Pango)
+#### Aplikacija
 
-## 3.2 Uporabnik aplikacije
+- HTTP: http://localhost:8080
+- HTTPS: https://localhost:8443
 
-Ustvari se sistemski uporabnik reportapp, ki je namenjen izvajanju backend servisa.
+#### API
 
-## 3.3 Podatkovna baza
+- https://localhost:8443/api/
 
-Samodejno se ustvari:
-PostgreSQL baza reporting_db
-uporabnik admin
-geslo in privilegiji
-nadzor nad ponovno izvedbo (idempotentnost)
+#### RDP
+- localhost:33389
 
-## 3.4 Priprava aplikacije
+# Možnost B: Cloud-init + Multipass
 
-Playbook:
+Omogoča **hitro postavitev VM-ja** z uporabo `cloud-init` brez Ansible-a.
 
-ustvari /opt/reportapp
-označi mapo kot varno za Git
-klonira GitHub repozitorij aplikacije preko posredovanega osebnega dostopnega žetona
-pripravi strukturo za loge in ustvarjene PDF/Word poročila
+### Struktura
 
-## 3.5 Backend (FastAPI)
-
-ustvari virtualno okolje (venv)
-namesti Python odvisnosti
-ustvari /etc/reportapp.env s konfiguracijo aplikacije
-ustvari systemd servis, ki samodejno zažene FastAPI backend
-
-## 3.6 Frontend (Angular)
-
-namesti Node.js iz uradnega NodeSource repozitorija
-zažene npm install
-zgradi Angular aplikacijo v production načinu
-
-## 3.7 TLS certifikati
-
-Samodejna generacija:
-
-lokalnega CA (certifikacijskega organa)
-strežniškega certifikata podpisanega z lokalnim CA
-Namenjeno za razvojne HTTPS okolje, brez potrebe po zunanjih CA.
-
-## 3.8 Nginx reverse proxy
-
-Nginx je konfiguriran tako, da:
-vsa HTTP promet preusmeri na HTTPS
-/api/ usmerja na FastAPI backend (127.0.0.1:8000)
-statične Angular datoteke streže iz build direktorija
-
-## 3.9 Požarni zid
-
-UFW omogoča le:
-
-22/tcp – SSH
-80/tcp – HTTP
-443/tcp – HTTPS
-3389/tcp – RDP
-
-## 3.10 Grafični vmesnik + RDP
-
-namestitev XFCE namiznega okolja
-namestitev XRDP
-omogočen oddaljen grafični dostop preko localhost:33389
-
-Dostop:
-
-Aplikacija (HTTP)
-http://localhost:8080
-Aplikacija (HTTPS)
-https://localhost:8443
-
-RDP
-V RDP odjemalcu:
-localhost:33389
-
-"Vsa gesla v projektu so samo testna"
-
---------------------------------------------------------------------------
-
-– Postavitev Aplikcaije ReportApp z uporabo Cloud-Init in Multipass
-
-Opis
-
-Ta del projekta predstavlja popolnoma avtomatiziran način namestitve Report App z uporabo cloud-init.
-
-Cloud-init skripta:
-
-namesti vse sistemske pakete (Nginx, PostgreSQL, Redis, Node.js, Python …),
-ustvari TLS certifikate,
-pripravi mape za backend in frontend aplikacijo,
-klonira in namesti Report App,
-vzpostavi systemd servis za FastAPI backend,
-konfigurira Nginx kot reverse proxy,
-omogoči UFW požarni zid,
-nastavi XFCE grafično okolje (če je zaželeno),
-zažene aplikacijo in zagotovi, da se ob vsakem zagonu samodejno zažene tudi backend.
-
-Struktura: 
-
+```
 cloud-init/
 └── cloud-init.yml
+```
 
-### 1. cloud-init.yml
+### Kaj naredi cloud-init
 
-Glavna konfiguracijska datoteka, ki jo Multipass uporabi:
+- Namesti vse sistemske pakete
+- Ustvari uporabnika `reportapp`
+- Nastavi PostgreSQL bazo
+- Klonira Report App repozitorij
+- Pripravi Python virtualenv
+- Zgradi Angular frontend
+- Ustvari TLS certifikate
+- Konfigurira Nginx
+- Nastavi UFW
+- Ustvari systemd servis
+- Po želji namesti XFCE
+- Po zagonu VM-ja zažene aplikacijo
 
-### 1.1 Namestitev paketov
+### Zagon z Multipass
 
-Cloud-init najprej izvede:
-packages:
-  - nginx
-  - postgresql
-  - postgresql-contrib
-  - redis-server
-  - git
-  - python3
-  - python3-pip
-  - python3-venv
-  - build-essential
-  - python3-dev
-  - libpq-dev
-  - curl
-  - gnupg
-  - libpango-1.0-0
-  - libpangoft2-1.0-0
-  - libcairo2
-  - libffi-dev
-  - ufw
-  - xfce4
-  ...
-Namestijo se ključni strežniški paketi
+```bash
+multipass launch \
+  --name reportapp \
+  --disk 30G \
+  --memory 8G \
+  --cpus 4 \
+  --cloud-init "cloud-init/cloud-init.yml" \
+  --timeout 1800
+```
 
-### 1.2 write_files
+### Dostop
 
-Vnaprej se ustvarijo ključne sistemske datoteke:
+#### SSH
 
-- reportapp.service (systemd servis)
-Skrbi, da se FastAPI backend izvaja kot sistemska storitev:
-teče kot uporabnik reportapp
-uporablja virtualno okolje
-samodejno restarta ob napaki
-
-Nginx konfiguracija:
-
-Datoteka /etc/nginx/sites-available/reportapp nastavi:
-reverse proxy za /api/ → FastAPI backend
-statično serviranje Angular frontenda
-povečanje client_max_body_size
-privzeto poslušanje na 80/tcp
-
-Namestitveni skript install-reportapp.sh
-
-To je osrednji del avtomatizacije.
-Skripta vključuje:
-ustvarjanje sistemskega uporabnika reportapp
-namestitev PostgreSQL baze in uporabnika
-kloniranje GitHub repozitorija
-pripravljen Python virtualenv
-namestitev Node.js (NodeSource)
-build Angular frontenda
-generiranje CA in TLS strežniškega certifikata
-nastavitev okoljske datoteke /etc/reportapp.env
-pripravo /app direktorijev za loge in poročila
-konfiguracijo UFW
-Cloud-init skrbi, da se skripta izvrši ob prvem zagonu.
-
-### 1.3 runcmd
-
-Na koncu se izvede:
-runcmd:
-  - [ bash, -c, "chmod +x /usr/local/bin/install-reportapp.sh && /usr/local/bin/install-reportapp.sh" ]
-
-### 2. Uporaba z Multipass
-
-Multipass omogoča enostavno ustvarjanje Ubuntu VM-jev s cloud-init skriptami.
-
-Ustvarjanje virtualnega stroja:
-multipass launch `
->>   --name reportapp `
->>   --disk 30G `
->>   --memory 8G `
->>   --cpus 4 `
->>   --cloud-init "C:\Users\egzon\dev-ops\cloud-init\cloud-init.yml" `
->>   --timeout 1800 `
->>   --network Wi-Fi
-
-### 2.1 Dostop do VM-ja
-
-SSH:
+```bash
 multipass shell reportapp
-
-Pridobivanje IP naslova:
 multipass info reportapp
+```
 
-### 3. Dostop do aplikacije
+### Aplikacija
 
-Ko cloud-init zaključi, je aplikacija dostopna na:
-- HTTP:
-http://<VM-IP>/
-- API (FastAPI backend):
-http://<VM-IP>/api/
-- Nginx reverse proxy je prednastavljen za razvojne potrebe.
+- http://<VM-IP>/
+- http://<VM-IP>/api/
+
+# Možnost C: Docker + Ansible (Infra as Code)
+
+Ta možnost uvaja **kontejnersko arhitekturo** za Report App in je namenjena bolj produkcijsko podobnemu okolju. Celoten stack (frontend, backend, scheduler, PostgreSQL, Nginx) teče v Docker kontejnerjih, orkestriranih z **Docker Compose**.
+
+Namestitev in zagon sta avtomatizirana z Ansible playbookom.
+
+### Struktura (Docker / Infra)
+
+```
+vagrant/
+├── ansible/
+│ └── playbook-docker.yml
+└── infra/
+├── docker-compose.yml
+└── conf.d/
+├── default.conf
+└── timeout.conf
+```
+
+### playbook-docker.yml
+
+Ansible playbook, ki:
+
+- namesti Docker Engine, Docker Compose plugin in Buildx
+- klonira `dev-ops` repozitorij na VM (`/opt/reportapp`)
+- preveri prisotnost `docker-compose.yml` in Nginx konfiguracije
+- pripravi direktorije za:
+  - audit loge
+  - generirana poročila
+  - TLS certifikate
+- generira **self-signed TLS certifikat** (če ne obstaja)
+- prijavi VM v **GitHub Container Registry (GHCR)**
+- izvede `docker compose pull` in `docker compose up -d`
+
+Playbook je idempotenten in primeren za večkratni zagon.
+
+### docker-compose.yml
+
+Definira celoten aplikacijski stack:
+
+- **postgres** – PostgreSQL 16 (persistent volume)
+- **backend** – FastAPI aplikacija (GHCR image)
+- **scheduler** – ločen worker za periodične naloge
+- **frontend** – Angular frontend (GHCR image)
+- **nginx** – reverse proxy + TLS terminacija
+
+Posebnosti:
+
+- uporaba `.env` datoteke za občutljive nastavitve
+- ločeni kontejnerji za backend in scheduler
+- skupno Docker omrežje `avichron-net`
+
+### Nginx konfiguracija (Docker)
+
+#### default.conf
+
+- HTTP → HTTPS preusmeritev
+- `/api/` → FastAPI backend (`backend:8000`)
+- `/` → Angular frontend
+- SPA fallback za Angular deep-linke
+- podpora za večje zahteve (`client_max_body_size 50m`)
+
+#### timeout.conf
+
+Poveča proxy timeout vrednosti (primerno za dolgotrajne reporte):
+
+- `proxy_connect_timeout 600`
+- `proxy_read_timeout 600`
+- `proxy_send_timeout 600`
+
+### TLS
+
+- Docker okolje uporablja **self-signed certifikat**, generiran z Ansible
+- Certifikat je mountan v Nginx kontejner
+- Namenjeno izključno razvoju / testiranju
+
+### Zagon (Docker varianta)
+
+Po zagonu VM-ja:
+
+```bash
+ansible-playbook vagrant/ansible/playbook-docker.yml
+```
+
+Aplikacija je nato dostopna na:
+
+- https://localhost/
+- https://localhost/api/
+
+## CI/CD pipeline (GitHub Actions)
+
+Docker image-i za backend in frontend se **samodejno gradijo in objavljajo** v **GitHub Container Registry (GHCR)** z uporabo **GitHub Actions**.
+
+Pipeline vključuje:
+
+- multi-stage Docker build (optimizirana velikost image-a)
+- uporabo **Docker Buildx**
+- taganje image-ov (`latest`, commit SHA)
+- objavo v GHCR (`ghcr.io/eghz23/...`)
+
+Ob vsaki spremembi v aplikacijskem repozitoriju se image samodejno posodobi. Deploy ni avtomatiziran – VM image-e pridobi z `docker compose pull`.
+
+## Dokumentacija in dokazila
+
+Za izpolnitev zahtev naloge je priporočeno (in delno obvezno):
+
+- 📸 **Screenshoti**:
+  - `vagrant up` (uspešen zagon)
+  - cloud-init provisioning (Multipass)
+  - delujoča aplikacija v brskalniku (HTTP/HTTPS)
+  - RDP / XFCE dostop (če uporabljen)
+
+- 🎥 **Kratek video (neobvezno)**:
+  - prikaz avtomatskega zagona okolja
+
+- 🔗 **Povezave**:
+  - Backend Dockerfile (multi-stage build)
+  - Frontend Dockerfile
+  - GitHub Actions workflow
+
+## Javni dostop (deployment)
+
+Aplikacijski stack je mogoče brez sprememb deployati na:
+
+- fakultetne `devops-sk-XX` VM-je
+- osebne VM-je
+- javne cloud ponudnike (npr. Oracle Free Tier)
+
+Za javni dostop je potrebno:
+
+- odpreti porte 80/443
+- nastaviti DNS (neobvezno)
+
+## Opombe
+
+- Projekt je namenjen **razvoju in testiranju**, ne produkciji
+- TLS certifikati so **lokalni in nezaupljivi**
+- Gesla so trdo kodirana zgolj za lažjo uporabo
+- Obe možnosti postavitve vzpostavita **funkcionalno enako okolje**
+- Docker varianta je najbolj podobna produkciji
+- Image-i se pridobijo iz **GitHub Container Registry (GHCR)**
+- `.env` datoteka mora obstajati (lahko prazna)
+
+
+
